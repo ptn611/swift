@@ -45,8 +45,8 @@ use drift_rs::{
     math::account_list_builder::AccountsListBuilder,
     swift_order_subscriber::{SignedMessageInfo, SignedOrderType},
     types::{
-        CommitmentConfig, MarketId, MarketStatus, MarketType, MarketTypeExt, OrderParams,
-        OrderParamsExt, OrderType, PositionDirection, ProgramError, SdkError, SdkResult,
+        CommitmentConfig, MarketId, MarketStatus, MarketType, OrderParams,
+        OrderType, PositionDirection, ProgramError, SdkError, SdkResult,
         SignedMsgTriggerOrderParams, VersionedMessage, VersionedTransaction, accounts::User,
         errors::ErrorCode,
     },
@@ -283,7 +283,7 @@ pub async fn process_order(
 
     if let Err(err) = validate_signed_order_params(
         &order_params,
-        market.map(|m| m.market_stats.min_order_size).unwrap_or(0),
+        market.map(|m| m.amm.min_order_size).unwrap_or(0),
     ) {
         log::warn!(
             target: "server",
@@ -974,8 +974,8 @@ impl ServerParams {
         max_margin_ratio: Option<u16>,
         context: &RequestContext,
     ) -> bool {
-        let state_bytes = match self.drift.account_raw(state_account()) {
-            Ok(b) => b,
+        let state = match self.drift.try_get_account::<drift_rs::types::accounts::State>(state_account()) {
+            Ok(s) => s,
             Err(err) => {
                 log::warn!(
                     target: "sim",
@@ -987,7 +987,7 @@ impl ServerParams {
         };
 
         let mut accounts_builder = AccountsListBuilder::default();
-        let accounts = match accounts_builder.try_build(
+        let mut accounts = match accounts_builder.try_build(
             &self.drift,
             user,
             &[MarketId::new(
@@ -1006,14 +1006,26 @@ impl ServerParams {
             }
         };
 
-        match crate::util::local_sim::simulate_place_perp_order(
-            user,
-            accounts,
-            &state_bytes,
-            *order_params,
+        let mut user_mut = user.clone();
+        let mut revenue_share_order = None;
+        match drift_rs::ffi::simulate_place_perp_order(
+            &mut user_mut,
+            &mut accounts,
+            &state,
+            order_params,
+            None,
             max_margin_ratio,
+            &mut revenue_share_order,
         ) {
-            Ok(()) => true,
+            Ok(true) => true,
+            Ok(false) => {
+                log::debug!(
+                    target: "sim",
+                    "{}: local sim rejected order",
+                    context.log_prefix
+                );
+                false
+            }
             Err(err) => {
                 log::debug!(
                     target: "sim",
@@ -1290,18 +1302,7 @@ impl ServerParams {
 
         // Mirrors the on-chain `place_perp_order` sanitize step: returns true
         // when the program would adjust the auction params at placement time.
-        let mut params = order_params.clone();
-        match params.update_perp_auction_params(&perp_market, oracle_data.data.price, true) {
-            Ok(sanitized) => sanitized,
-            Err(err) => {
-                log::debug!(
-                    target: "sim",
-                    "{}: local sim failed: {err:?}",
-                    context.log_prefix
-                );
-                true
-            }
-        }
+        drift_rs::ffi::simulate_will_auction_params_sanitize(&order_params, &perp_market, oracle_data.data.price, true).unwrap_or(false)
     }
 
     async fn publish_order(

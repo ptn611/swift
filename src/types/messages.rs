@@ -7,7 +7,7 @@ use base64::Engine;
 use drift_rs::{
     drift_idl::types::SignedMsgOrderParamsDelegateMessage as IdlSignedMsgOrderParamsDelegateMessage,
     swift_order_subscriber::{SignedMessageInfo, SignedOrderType, deser_signed_msg_type},
-    types::{MarketType, market_type_from_str},
+    types::MarketType,
 };
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use serde::de::value::StrDeserializer;
@@ -310,7 +310,7 @@ where
     D: serde::Deserializer<'de>,
 {
     let market_type: &str = serde::Deserialize::deserialize(deserializer)?;
-    market_type_from_str(market_type).map_err(|_| serde::de::Error::custom("perp or spot"))
+    MarketType::from_str(market_type).map_err(|_| serde::de::Error::custom("perp or spot"))
 }
 
 /// Deserialize solana transaction

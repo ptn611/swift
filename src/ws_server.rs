@@ -21,7 +21,7 @@ use drift_rs::{
     constants::MarketExt,
     swift_order_subscriber::SignedMessageInfo,
     types::{
-        MarketType, MarketTypeExt,
+        MarketType,
         accounts::{PerpMarket, SignedMsgWsDelegates, UserStats},
     },
 };
