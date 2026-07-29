@@ -16,9 +16,10 @@ use std::{
 use anchor_lang::AccountDeserialize;
 use drift::{
     controller::orders::place_perp_order,
-    error::{VelocityResult, ErrorCode},
-    sdk::{VelocityAccounts, OwnedAccount},
+    error::{ErrorCode, VelocityResult},
+    sdk::{OwnedAccount, VelocityAccounts},
     state::{
+        high_leverage_mode_config::HighLeverageModeConfig,
         oracle_map::OracleMap,
         order_params::{OrderParams, PlaceOrderOptions},
         perp_market_map::PerpMarketMap,
@@ -27,6 +28,7 @@ use drift::{
         user::User,
     },
 };
+use anchor_lang::AccountLoader;
 use solana_account_info::AccountInfo;
 use solana_clock::Clock;
 use solana_pubkey::Pubkey;
@@ -99,6 +101,7 @@ pub fn simulate_place_perp_order(
 
     let user_key = user.authority;
     let mut rev_share_order = None;
+    let high_leverage_mode_config = None;
     place_perp_order(
         &state,
         &mut user,
@@ -106,6 +109,7 @@ pub fn simulate_place_perp_order(
         &perp_map,
         &spot_map,
         &mut oracle_map,
+        &high_leverage_mode_config,
         &local_clock,
         order_params,
         PlaceOrderOptions::default(),

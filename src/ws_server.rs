@@ -5,30 +5,30 @@ use std::{
     net::SocketAddr,
     str::FromStr,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
 
 use anchor_lang::AccountDeserialize;
 use anyhow::{Context, Result};
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use dashmap::DashMap;
 use dotenv::dotenv;
 use drift_rs::{
+    Pubkey, RpcClient, Wallet,
     constants::MarketExt,
     swift_order_subscriber::SignedMessageInfo,
     types::{
-        accounts::{PerpMarket, SignedMsgWsDelegates, UserStats},
         MarketType, MarketTypeExt,
+        accounts::{PerpMarket, SignedMsgWsDelegates, UserStats},
     },
-    Pubkey, RpcClient, Wallet,
 };
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use futures_util::{
-    stream::{self, FuturesUnordered},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
+    stream::{self, FuturesUnordered},
 };
 use log::{debug, warn};
 use prometheus::Registry;
@@ -43,7 +43,7 @@ use tokio::{
     time::timeout,
 };
 use tokio_tungstenite::tungstenite::{
-    self, extensions::DeflateConfig, protocol::WebSocketConfig, Message,
+    self, Message, extensions::DeflateConfig, protocol::WebSocketConfig,
 };
 
 use crate::{
@@ -52,9 +52,9 @@ use crate::{
             OrderMetadataAndMessage, SubscribeActions, WsAuthMessage, WsClientMessage, WsMessage,
             WsSubscribeMessage,
         },
-        types::{unix_now_ms, WsError},
+        types::{WsError, unix_now_ms},
     },
-    util::metrics::{metrics_handler, MetricsServerParams, WsServerMetrics},
+    util::metrics::{MetricsServerParams, WsServerMetrics, metrics_handler},
 };
 
 #[cfg(test)]
@@ -983,7 +983,7 @@ fn decode_pubkey(request: &str) -> Result<Pubkey, &'static str> {
 
 #[cfg(test)]
 mod test {
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use solana_keypair::Keypair;
 
     use super::*;

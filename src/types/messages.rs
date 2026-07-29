@@ -6,8 +6,8 @@ use arrayvec::ArrayVec;
 use base64::Engine;
 use drift_rs::{
     drift_idl::types::SignedMsgOrderParamsDelegateMessage as IdlSignedMsgOrderParamsDelegateMessage,
-    swift_order_subscriber::{deser_signed_msg_type, SignedMessageInfo, SignedOrderType},
-    types::{market_type_from_str, MarketType},
+    swift_order_subscriber::{SignedMessageInfo, SignedOrderType, deser_signed_msg_type},
+    types::{MarketType, market_type_from_str},
 };
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use serde::de::value::StrDeserializer;

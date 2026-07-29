@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use anchor_lang::AccountDeserialize;
 use base64::Engine;
-use drift_rs::{types::accounts::User, DriftClient};
-use redis::{aio::MultiplexedConnection, AsyncCommands};
+use drift_rs::{DriftClient, types::accounts::User};
+use redis::{AsyncCommands, aio::MultiplexedConnection};
 use solana_clock::Slot;
 use solana_pubkey::Pubkey;
 
@@ -106,7 +106,9 @@ impl UserAccountFetcher {
                     (Some(redis_slot), Some(account)) => {
                         let redis_slot = redis_slot.parse::<u64>().unwrap_or_default();
                         if slot.saturating_sub(redis_slot) > (90_f64 * 2.5) as u64 {
-                            log::warn!("User found in redis is too old. redis: {redis_slot}, current: {slot}");
+                            log::warn!(
+                                "User found in redis is too old. redis: {redis_slot}, current: {slot}"
+                            );
                             return Err(());
                         }
 

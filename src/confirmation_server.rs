@@ -1,10 +1,10 @@
 use std::{borrow::Cow, env, net::SocketAddr};
 
 use axum::{
+    Router,
     extract::{Query, State},
     http::Method,
     routing::get,
-    Router,
 };
 use axum_prometheus::PrometheusMetricLayer;
 use dotenv::dotenv;
@@ -226,8 +226,8 @@ mod tests {
     use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
     use futures_util::FutureExt;
     use redis::{
-        aio::{ConnectionLike, MultiplexedConnection},
         RedisFuture,
+        aio::{ConnectionLike, MultiplexedConnection},
     };
 
     use super::*;

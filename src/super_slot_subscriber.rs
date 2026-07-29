@@ -1,12 +1,12 @@
 use std::{
     sync::{
-        atomic::{AtomicBool, AtomicU64},
         Arc,
+        atomic::{AtomicBool, AtomicU64},
     },
     time::Duration,
 };
 
-use drift_rs::{event_subscriber::PubsubClient, slot_subscriber::SlotSubscriber, RpcClient};
+use drift_rs::{RpcClient, event_subscriber::PubsubClient, slot_subscriber::SlotSubscriber};
 use solana_clock::Slot;
 
 /// Combines multiple slot subscribers for redundancy

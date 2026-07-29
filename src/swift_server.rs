@@ -2,7 +2,7 @@ use std::{
     collections::HashSet,
     env,
     net::SocketAddr,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
     time::{Duration, SystemTime},
 };
 
@@ -11,48 +11,49 @@ use crate::{
     types::{
         messages::{
             DepositAndPlaceRequest, IncomingSignedMessage, OrderMetadataAndMessage,
-            ProcessOrderResponse, PROCESS_ORDER_RESPONSE_ERROR_MSG_DELISTED_MARKET,
+            PROCESS_ORDER_RESPONSE_ERROR_MSG_DELISTED_MARKET,
             PROCESS_ORDER_RESPONSE_ERROR_MSG_DELIVERY_FAILED,
             PROCESS_ORDER_RESPONSE_ERROR_MSG_INVALID_ORDER,
             PROCESS_ORDER_RESPONSE_ERROR_MSG_INVALID_ORDER_AMOUNT,
             PROCESS_ORDER_RESPONSE_ERROR_MSG_ORDER_SLOT_TOO_OLD,
             PROCESS_ORDER_RESPONSE_ERROR_MSG_VERIFY_SIGNATURE,
             PROCESS_ORDER_RESPONSE_IGNORE_PUBKEY, PROCESS_ORDER_RESPONSE_INVALID_UUID_UTF8,
-            PROCESS_ORDER_RESPONSE_MESSAGE_SUCCESS,
+            PROCESS_ORDER_RESPONSE_MESSAGE_SUCCESS, ProcessOrderResponse,
         },
-        types::{unix_now_ms, RequestContext},
+        types::{RequestContext, unix_now_ms},
     },
     user_account_fetcher::UserAccountFetcher,
     util::{
         headers::XSwiftClientConsumer,
-        metrics::{metrics_handler, MetricsServerParams, SwiftServerMetrics},
+        metrics::{MetricsServerParams, SwiftServerMetrics, metrics_handler},
     },
 };
 use anchor_lang::{AccountDeserialize, Discriminator};
 use axum::{
+    Json, Router,
     extract::State,
     http::{self, Method, StatusCode},
     routing::{get, post},
-    Json, Router,
 };
 use base64::Engine;
 use dotenv::dotenv;
 use drift_rs::{
+    Context, DriftClient, RpcClient, TransactionBuilder, Wallet,
     constants::state_account,
     drift_idl,
     event_subscriber::PubsubClient,
     math::account_list_builder::AccountsListBuilder,
     swift_order_subscriber::{SignedMessageInfo, SignedOrderType},
     types::{
-        accounts::User, errors::ErrorCode, CommitmentConfig, MarketId, MarketStatus, MarketType,
-        MarketTypeExt, OrderParams, OrderParamsExt, OrderType, PositionDirection, ProgramError,
-        SdkError, SdkResult, SignedMsgTriggerOrderParams, VersionedMessage, VersionedTransaction,
+        CommitmentConfig, MarketId, MarketStatus, MarketType, MarketTypeExt, OrderParams,
+        OrderParamsExt, OrderType, PositionDirection, ProgramError, SdkError, SdkResult,
+        SignedMsgTriggerOrderParams, VersionedMessage, VersionedTransaction, accounts::User,
+        errors::ErrorCode,
     },
-    Context, DriftClient, RpcClient, TransactionBuilder, Wallet,
 };
 use log::warn;
 use prometheus::Registry;
-use redis::{aio::MultiplexedConnection, AsyncCommands};
+use redis::{AsyncCommands, aio::MultiplexedConnection};
 use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_clock::Slot;
 use solana_hash::Hash;
@@ -1608,8 +1609,8 @@ mod tests {
 
     use super::*;
     use drift_rs::types::{
-        accounts::User, SignedMsgOrderParamsDelegateMessage, SignedMsgOrderParamsMessage,
-        SignedMsgTriggerOrderParams,
+        SignedMsgOrderParamsDelegateMessage, SignedMsgOrderParamsMessage,
+        SignedMsgTriggerOrderParams, accounts::User,
     };
     use ed25519_dalek::Signature as Ed25519Signature;
     use solana_native_token::LAMPORTS_PER_SOL;
