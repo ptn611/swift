@@ -13,6 +13,7 @@ enum Fallback {
     /// Lookup from RPC
     Rpc(DriftClient),
     /// Lookup from some mocked hashmap
+    #[allow(dead_code)]
     Mock(HashMap<Pubkey, User>),
 }
 
