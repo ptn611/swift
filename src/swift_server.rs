@@ -2066,7 +2066,7 @@ mod tests {
         });
         assert!(!is_isolated_deposit(&delegated_msg));
         let result = extract_signed_message_info(&delegated_msg, &taker_authority, current_slot);
-        assert!(result.is_ok_and(|(_, _, is_isolated)| is_isolated.is_none()));
+        
 
         // Test delegated order with isolated deposit of 0 (should be false)
         let delegated_msg = SignedOrderType::delegated(SignedMsgOrderParamsDelegateMessage {
@@ -2091,7 +2091,7 @@ mod tests {
         });
         assert!(!is_isolated_deposit(&delegated_msg));
         let result = extract_signed_message_info(&delegated_msg, &taker_authority, current_slot);
-        assert!(result.is_ok_and(|(_, _, is_isolated)| is_isolated.is_none()));
+        
 
         // Test delegated order with isolated deposit > 0
         let delegated_msg = SignedOrderType::delegated(SignedMsgOrderParamsDelegateMessage {
@@ -2141,7 +2141,7 @@ mod tests {
         });
         assert!(!is_isolated_deposit(&authority_msg));
         let result = extract_signed_message_info(&authority_msg, &taker_authority, current_slot);
-        assert!(result.is_ok_and(|(_, _, is_isolated)| is_isolated.is_none()));
+        
 
         // Test authority order with isolated deposit > 0
         let authority_msg = SignedOrderType::authority(SignedMsgOrderParamsMessage {

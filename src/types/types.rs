@@ -96,18 +96,61 @@ impl RequestContext {
 mod tests {
     use super::*;
 
+    // V-IMPL FIX r169: build payload theo layout hien hanh + ky that (thay hex cu)
     #[test]
     fn from_incoming_message_valid_utf8_uuid() {
-        // Payload from messages::tests with uuid [115, 56, 108, 117, 74, 76, 90, 101] = "s8luJLZe"
-        let json = r#"{
-            "market_index": 2,
-            "market_type": "perp",
-            "message": "c8d5a65e2234f55d0001010080841e00000000000000000000000000020000000000000000013201bb60507d000000000117c0127c000000000000272108160000000073386c754a4c5a650000",
-            "signature": "H8HRloc2vBdhHyiNK5W/Shv3kVKmIYsHTBzlD2ecyxyOUh7EuysU/Y5AOXZ3IpsMxRyLn6OSAHKEgCIQX4OpDQ==",
-            "signing_authority": "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
-            "taker_pubkey": "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
-        }"#;
-        let msg: IncomingSignedMessage = serde_json::from_str(json).expect("deserialize");
+        use anchor_lang::AnchorSerialize;
+        use base64::Engine;
+        use drift_rs::drift_idl::types::{
+            OrderParams, OrderTriggerCondition as IdlTriggerCondition, OrderType as IdlOrderType,
+            PositionDirection as IdlDirection, PostOnlyParam as IdlPostOnly,
+            SignedMsgOrderParamsMessage,
+        };
+
+        let m = SignedMsgOrderParamsMessage {
+            signed_msg_order_params: OrderParams {
+                order_type: IdlOrderType::Market,
+                market_type: drift_rs::drift_idl::types::MarketType::Perp,
+                direction: IdlDirection::Short,
+                user_order_id: 0,
+                base_asset_amount: 2_000_000,
+                price: 0,
+                market_index: 2,
+                reduce_only: false,
+                post_only: IdlPostOnly::None,
+                bit_flags: 0,
+                max_ts: None,
+                trigger_price: None,
+                trigger_condition: IdlTriggerCondition::Above,
+                offset: None,
+                offset_type: None,
+                auction_duration: Some(50),
+                auction_start_price: Some(2_102_419_643),
+                auction_end_price: Some(2_081_603_607),
+            },
+            sub_account_id: 2,
+            slot: 369_631_527,
+            uuid: *b"s8luJLZe",
+            take_profit_order_params: None,
+            stop_loss_order_params: None,
+            max_margin_ratio: Some(u16::MAX),
+            builder_idx: None,
+            builder_fee_tenth_bps: None,
+            isolated_position_deposit: None,
+        };
+        let mut buf = b"smsgv002".to_vec();
+        AnchorSerialize::serialize(&m, &mut buf).unwrap();
+        let payload_hex = faster_hex::hex_string(&buf);
+
+        let kp = solana_keypair::Keypair::new();
+        let sig = solana_signer::Signer::sign_message(&kp, payload_hex.as_bytes());
+        let sig_b64 = base64::prelude::BASE64_STANDARD.encode(sig.as_ref());
+        let pk = solana_signer::Signer::pubkey(&kp).to_string();
+
+        let json = format!(
+            r#"{{"market_index":2,"market_type":"perp","message":"{payload_hex}","signature":"{sig_b64}","signing_authority":"{pk}","taker_pubkey":"{pk}"}}"#
+        );
+        let msg: IncomingSignedMessage = serde_json::from_str(&json).expect("deserialize");
         let ctx = RequestContext::from_incoming_message(&msg).expect("valid utf8 uuid");
         assert_eq!(ctx.order_uuid, "s8luJLZe");
         assert_eq!(ctx.market_index, 2);

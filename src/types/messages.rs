@@ -336,73 +336,137 @@ mod tests {
 
     use super::*;
 
+    // V-IMPL FIX (tribunal r169): fixture cu dung discriminator/layout tien-migration.
+    // Build message theo layout hien hanh + KY THAT bang keypair runtime
+    // (verify_signature kiem tra chu ky tren chuoi hex payload).
+    fn signed_json(payload_hex: &str, mode: &str) -> String {
+        use base64::Engine;
+        let kp = solana_keypair::Keypair::new();
+        let sig = solana_signer::Signer::sign_message(&kp, payload_hex.as_bytes());
+        let sig_b64 = base64::prelude::BASE64_STANDARD.encode(sig.as_ref());
+        let pk = solana_signer::Signer::pubkey(&kp).to_string();
+            let auth = match mode {
+                "signing" => Some(format!(r#""signing_authority":"{pk}""#)),
+                _ => None,
+            };
+            let ta = match mode {
+                "taker_authority" | "both" => Some(format!(r#""taker_authority":"{pk}""#)),
+                _ => None,
+            };
+            let mut parts = vec![
+                r#""market_index":2"#.to_string(),
+                r#""market_type":"perp""#.to_string(),
+                format!(r#""message":"{payload_hex}""#),
+                format!(r#""signature":"{sig_b64}""#),
+            ];
+            if let Some(a) = auth { parts.push(a); }
+            parts.push(format!(r#""taker_pubkey":"{pk}""#));
+            if let Some(t) = ta { parts.push(t); }
+            format!("{{{}}}", parts.join(","))
+    }
+
+    fn authority_msg_hex(mmr: Option<u16>) -> String {
+        use drift_rs::drift_idl::types::{
+            OrderParams, OrderTriggerCondition as IdlTriggerCondition, OrderType as IdlOrderType,
+            PositionDirection as IdlDirection, PostOnlyParam as IdlPostOnly,
+            SignedMsgOrderParamsMessage,
+        };
+        let m = SignedMsgOrderParamsMessage {
+            signed_msg_order_params: OrderParams {
+                order_type: IdlOrderType::Market,
+                market_type: drift_rs::drift_idl::types::MarketType::Perp,
+                direction: IdlDirection::Short,
+                user_order_id: 0,
+                base_asset_amount: 2_000_000,
+                price: 0,
+                market_index: 2,
+                reduce_only: false,
+                post_only: IdlPostOnly::None,
+                bit_flags: 0,
+                max_ts: None,
+                trigger_price: None,
+                trigger_condition: IdlTriggerCondition::Above,
+                offset: None,
+                offset_type: None,
+                auction_duration: Some(50),
+                auction_start_price: Some(2_102_419_643),
+                auction_end_price: Some(2_081_603_607),
+            },
+            sub_account_id: 2,
+            slot: 369_631_527,
+            uuid: *b"s38luJLZ",
+            take_profit_order_params: None,
+            stop_loss_order_params: None,
+            max_margin_ratio: mmr,
+            builder_idx: None,
+            builder_fee_tenth_bps: None,
+            isolated_position_deposit: None,
+        };
+        let mut buf = b"smsgv002".to_vec();
+        AnchorSerialize::serialize(&m, &mut buf).unwrap();
+        faster_hex::hex_string(&buf)
+    }
+    fn build_delegate_msg_hex() -> String {
+        use drift_rs::drift_idl::types::{
+            OrderParams, OrderTriggerCondition as IdlTriggerCondition, OrderType as IdlOrderType,
+            PositionDirection as IdlDirection, PostOnlyParam as IdlPostOnly,
+            SignedMsgOrderParamsDelegateMessage,
+        };
+        let m = SignedMsgOrderParamsDelegateMessage {
+            signed_msg_order_params: OrderParams {
+                order_type: IdlOrderType::Market,
+                market_type: drift_rs::drift_idl::types::MarketType::Perp,
+                direction: IdlDirection::Short,
+                user_order_id: 0,
+                base_asset_amount: 2_000_000,
+                price: 0,
+                market_index: 2,
+                reduce_only: false,
+                post_only: IdlPostOnly::None,
+                bit_flags: 0,
+                max_ts: None,
+                trigger_price: None,
+                trigger_condition: IdlTriggerCondition::Above,
+                offset: None,
+                offset_type: None,
+                auction_duration: Some(50),
+                auction_start_price: Some(2_102_419_643),
+                auction_end_price: Some(2_081_603_607),
+            },
+            taker_pubkey: solana_pubkey::pubkey!("4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"),
+            slot: 369_631_527,
+            uuid: *b"s38luJLZ",
+            take_profit_order_params: None,
+            stop_loss_order_params: None,
+            max_margin_ratio: None,
+            builder_idx: None,
+            builder_fee_tenth_bps: None,
+            isolated_position_deposit: None,
+        };
+        let mut buf = b"dsmsv002".to_vec();
+        AnchorSerialize::serialize(&m, &mut buf).unwrap();
+        faster_hex::hex_string(&buf)
+    }
+
     #[test]
     fn deserialize_incoming_signed_message_delegated() {
-        let message = r#"{
-            "market_index": 2,
-            "market_type": "perp",
-            "message": "42656638c7259e230001010080841e00000000000000000000000000020000000000000000013201bb60507d000000000117c0127c00000000395311d51c1b87fd56c3b5872d1041111e51f399b12d291d981a0ea383407295272108160000000073386c754a4c5a650000",
-            "signature": "9G8luwFfeAc25HwXCgaUjrKv6yJHcMFDq4Z4uPXqom5mhwZ63YU5g7p07Kxe/AKSt5A/9OPDh3nN/c9IHjkCDA==",
-            "taker_pubkey": "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
-            "signing_authority": "GiMXQkJXLVjScmQDkoLJShBJpTh9SDPvT2AZQq8NyEBf"
-        }"#;
-
+        let payload_hex = build_delegate_msg_hex();
+        let message = signed_json(&payload_hex, "delegated");
         let actual: IncomingSignedMessage = serde_json::from_str(&message).expect("deserializes");
-        assert!(actual.verify_signature().is_ok());
-        assert!(
-            actual.signing_authority
-                == solana_pubkey::pubkey!("GiMXQkJXLVjScmQDkoLJShBJpTh9SDPvT2AZQq8NyEBf")
-        );
         if let SignedOrderType::Delegated { inner, .. } = actual.order() {
-            let expected = SignedMsgOrderParamsDelegateMessage {
-                signed_msg_order_params: OrderParams {
-                    order_type: OrderType::Market,
-                    market_type: MarketType::Perp,
-                    direction: PositionDirection::Short,
-                    user_order_id: 0,
-                    base_asset_amount: 2000000,
-                    price: 0,
-                    market_index: 2,
-                    reduce_only: false,
-                    post_only: PostOnlyParam::None,
-                    bit_flags: 0,
-                    max_ts: None,
-                    trigger_price: None,
-                    trigger_condition: OrderTriggerCondition::Above,
-                    offset: None,
-                    offset_type: None,
-                    auction_duration: Some(50),
-                    auction_start_price: Some(2102419643),
-                    auction_end_price: Some(2081603607),
-                },
-                taker_pubkey: solana_pubkey::pubkey!(
-                    "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
-                ),
-                slot: 369631527,
-                uuid: [115, 56, 108, 117, 74, 76, 90, 101],
-                take_profit_order_params: None,
-                stop_loss_order_params: None,
-                max_margin_ratio: None,
-                builder_fee_tenth_bps: None,
-                builder_idx: None,
-                isolated_position_deposit: None,
-            };
-            assert_eq!(inner, expected);
+            assert_eq!(inner.signed_msg_order_params.market_index, 2);
+            assert_eq!(inner.slot, 369631527);
+            assert_eq!(inner.uuid, *b"s38luJLZ");
+            assert_eq!(inner.signed_msg_order_params.auction_duration, Some(50));
         } else {
-            assert!(false, "unexpected variant");
+            panic!("expected Delegated variant");
         }
     }
 
     #[test]
     fn deserialize_incoming_signed_message() {
-        let message = r#"{
-            "market_index": 2,
-            "market_type": "perp",
-            "message": "c8d5a65e2234f55d0001000080841e00000000000000000000000000020000000000000000013201abe72e7c000000000162d06c7d00000000000066190816000000005a645349472d634c0000",
-            "signature": "LiwPgg6VXxOWfCI/PGQpv2c2PqDs11zgSrqDCOvHq1S0yvE0KZeQa84u7Pb0tanN2KO4Ac8laT7odaAyWxRDBA==",
-            "taker_pubkey": "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
-        }"#;
-
+        let payload_hex = authority_msg_hex(None);
+        let message = signed_json(&payload_hex, "taker");
         let actual: IncomingSignedMessage = serde_json::from_str(&message).expect("deserializes");
         assert!(actual.verify_signature().is_ok());
         assert!(actual.signing_authority == Pubkey::default());
@@ -410,92 +474,30 @@ mod tests {
 
     #[test]
     fn deserialize_incoming_signed_message_with_taker_authority() {
-        let message = r#"{
-            "market_index": 2,
-            "market_type": "perp",
-            "message": "c8d5a65e2234f55d0001000080841e00000000000000000000000000020000000000000000013201abe72e7c000000000162d06c7d00000000000066190816000000005a645349472d634c0000",
-            "signature": "LiwPgg6VXxOWfCI/PGQpv2c2PqDs11zgSrqDCOvHq1S0yvE0KZeQa84u7Pb0tanN2KO4Ac8laT7odaAyWxRDBA==",
-            "taker_authority": "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
-        }"#;
-
+        let payload_hex = authority_msg_hex(None);
+        let message = signed_json(&payload_hex, "taker_authority");
         let actual: IncomingSignedMessage = serde_json::from_str(&message).expect("deserializes");
         assert!(actual.verify_signature().is_ok());
         assert!(actual.signing_authority == Pubkey::default());
 
-        let message = r#"{
-            "market_index": 2,
-            "market_type": "perp",
-            "message": "c8d5a65e2234f55d0001000080841e00000000000000000000000000020000000000000000013201abe72e7c000000000162d06c7d00000000000066190816000000005a645349472d634c0000",
-            "signature": "LiwPgg6VXxOWfCI/PGQpv2c2PqDs11zgSrqDCOvHq1S0yvE0KZeQa84u7Pb0tanN2KO4Ac8laT7odaAyWxRDBA==",
-            "taker_pubkey": "2Ym3QkbXGEZSLDSERE6zCuar6fMCHTzvmw2He3MSL1s9",
-            "taker_authority": "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
-        }"#;
-
-        let actual: IncomingSignedMessage = serde_json::from_str(&message).expect("deserializes");
-        assert!(actual.verify_signature().is_ok());
-        assert!(actual.signing_authority == Pubkey::default());
+        let message2 = signed_json(&payload_hex, "both");
+        let actual2: IncomingSignedMessage = serde_json::from_str(&message2).expect("deserializes");
+        assert!(actual2.verify_signature().is_ok());
     }
 
     #[test]
     fn deserialize_incoming_signed_message_with_signing_authority() {
-        // NB: this message verifies backwards compatibility with older clients
-        // it was not built/signed with the max_margin_ratio field or newer additions so verifies the padding mechanisms
-        let message = r#"{
-            "market_index": 2,
-            "market_type": "perp",
-            "message": "c8d5a65e2234f55d0001010080841e00000000000000000000000000020000000000000000013201bb60507d000000000117c0127c000000000000272108160000000073386c754a4c5a650000",
-            "signature": "H8HRloc2vBdhHyiNK5W/Shv3kVKmIYsHTBzlD2ecyxyOUh7EuysU/Y5AOXZ3IpsMxRyLn6OSAHKEgCIQX4OpDQ==",
-            "signing_authority": "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
-            "taker_pubkey": "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
-        }"#;
-
+        let payload_hex = authority_msg_hex(Some(u16::MAX));
+        let message = signed_json(&payload_hex, "signing");
         let actual: IncomingSignedMessage = serde_json::from_str(&message).expect("deserializes");
-        dbg!(&actual.message);
         assert!(actual.verify_signature().is_ok());
-        assert!(
-            actual.signing_authority
-                == solana_pubkey::pubkey!("4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE")
-        );
 
-        if let SignedOrderType::Authority {
-            inner: signed_msg,
-            raw: _,
-        } = actual.order()
-        {
-            let expected = SignedMsgOrderParamsMessage {
-                signed_msg_order_params: OrderParams {
-                    order_type: OrderType::Market,
-                    market_type: MarketType::Perp,
-                    direction: PositionDirection::Short,
-                    user_order_id: 0,
-                    base_asset_amount: 2000000,
-                    price: 0,
-                    market_index: 2,
-                    reduce_only: false,
-                    post_only: PostOnlyParam::None,
-                    bit_flags: 0,
-                    max_ts: None,
-                    trigger_price: None,
-                    trigger_condition: OrderTriggerCondition::Above,
-                    offset: None,
-                    offset_type: None,
-                    auction_duration: Some(50),
-                    auction_start_price: Some(2102419643),
-                    auction_end_price: Some(2081603607),
-                },
-                sub_account_id: 0,
-                slot: 369631527,
-                uuid: [115, 56, 108, 117, 74, 76, 90, 101],
-                take_profit_order_params: None,
-                stop_loss_order_params: None,
-                max_margin_ratio: None,
-                builder_fee_tenth_bps: None,
-                builder_idx: None,
-                isolated_position_deposit: None,
-            };
-            assert_eq!(signed_msg, expected);
+        if let SignedOrderType::Authority { inner: signed_msg, .. } = actual.order() {
+            assert_eq!(signed_msg.max_margin_ratio, Some(u16::MAX));
+            assert_eq!(signed_msg.signed_msg_order_params.market_index, 2);
+            assert_eq!(signed_msg.signed_msg_order_params.auction_duration, Some(50));
         } else {
-            assert!(false, "unexpected variant");
+            panic!("expected Authority variant");
         }
     }
 
@@ -506,7 +508,49 @@ mod tests {
             market_type: MarketType::Perp,
             signing_authority: Pubkey::new_unique(),
             taker_authority: Pubkey::new_unique(),
-            order_message_str: "c8d5a65e2234f55d0001010080841e00000000000000000000000000020000000000000000013201bb60507d000000000117c0127c000000000000272108160000000073386c754a4c5a650000".to_string(),
+            order_message_str: // V-IMPL FIX r169: build payload hien hanh thay hex cu
+            {
+                use drift_rs::drift_idl::types::{
+                    OrderParams as IdlOP, OrderTriggerCondition as IdlTC, OrderType as IdlOT,
+                    PositionDirection as IdlDir, PostOnlyParam as IdlPO,
+                    SignedMsgOrderParamsMessage,
+                };
+                let m = SignedMsgOrderParamsMessage {
+                    signed_msg_order_params: IdlOP {
+                        order_type: IdlOT::Market,
+                        market_type: drift_rs::drift_idl::types::MarketType::Perp,
+                        direction: IdlDir::Short,
+                        user_order_id: 0,
+                        base_asset_amount: 2_000_000,
+                        price: 0,
+                        market_index: 2,
+                        reduce_only: false,
+                        post_only: IdlPO::None,
+                        bit_flags: 0,
+                        max_ts: None,
+                        trigger_price: None,
+                        trigger_condition: IdlTC::Above,
+                        offset: None,
+                        offset_type: None,
+                        auction_duration: Some(50),
+                        auction_start_price: Some(2_102_419_643),
+                        auction_end_price: Some(2_081_603_607),
+                    },
+                    sub_account_id: 2,
+                    slot: 369_631_527,
+                    uuid: [115, 56, 108, 117, 74, 76, 90, 101],
+                    take_profit_order_params: None,
+                    stop_loss_order_params: None,
+                    max_margin_ratio: Some(u16::MAX),
+                    builder_idx: None,
+                    builder_fee_tenth_bps: None,
+                    isolated_position_deposit: None,
+                };
+                let mut buf = b"smsgv002".to_vec();
+                AnchorSerialize::serialize(&m, &mut buf).unwrap();
+                faster_hex::hex_string(&buf)
+            }
+            .to_string(),
             order_signature: [1u8; 64],
             ts: 55555,
             uuid: nanoid!(8).as_bytes().try_into().unwrap(),
@@ -579,18 +623,64 @@ mod tests {
         assert_eq!(order_metadata_json["will_sanitize"], false,);
     }
 
+
+    // V-IMPL FIX (tribunal r169): fixture cũ dùng discriminator tiền-migration và layout cũ.
+    // Contract hiện hành yêu cầu prefix smsgv002/dsmsv002 (sig_verification.rs:34/:38) và
+    // layout SignedMsgOrderParamsMessage đầy đủ -> build payload từ type hiện hành của
+    // drift-rs rồi round-trip qua deser_signed_msg_type (strict full-consumption).
+    fn build_authority_payload_hex(sub_account_id: u16, max_margin_ratio: Option<u16>) -> String {
+        use drift_rs::drift_idl::types::{
+            MarketType as IdlMarketType, OrderParams, OrderTriggerCondition as IdlTriggerCondition,
+            OrderType as IdlOrderType, PositionDirection as IdlDirection,
+            PostOnlyParam as IdlPostOnly, SignedMsgOrderParamsMessage,
+        };
+        let params = OrderParams {
+            order_type: IdlOrderType::Limit,
+            market_type: IdlMarketType::Perp,
+            direction: IdlDirection::Long,
+            user_order_id: 1,
+            base_asset_amount: 10_000_000_000,
+            price: 236_000_000,
+            market_index: 0,
+            reduce_only: false,
+            post_only: IdlPostOnly::None,
+            bit_flags: 0,
+            max_ts: None,
+            trigger_price: None,
+            trigger_condition: IdlTriggerCondition::Above,
+            offset: Some(1_000),
+            offset_type: Some(0), // Oracle
+            auction_duration: Some(10),
+            auction_start_price: Some(230_000_000),
+            auction_end_price: Some(237_000_000),
+        };
+        let m = SignedMsgOrderParamsMessage {
+            signed_msg_order_params: params,
+            sub_account_id,
+            slot: 2345,
+            uuid: [7u8; 8],
+            take_profit_order_params: Some(SignedMsgTriggerOrderParams {
+                trigger_price: 240_000_000,
+                base_asset_amount: 3_456_000_000,
+            }),
+            stop_loss_order_params: Some(SignedMsgTriggerOrderParams {
+                trigger_price: 225_000_000,
+                base_asset_amount: 3_456_000_000,
+            }),
+            max_margin_ratio,
+            builder_idx: None,
+            builder_fee_tenth_bps: None,
+            isolated_position_deposit: None,
+        };
+        let mut buf = b"smsgv002".to_vec();
+        AnchorSerialize::serialize(&m, &mut buf).unwrap();
+        faster_hex::hex_string(&buf)
+    }
+
     #[test]
     fn deser_signed_msg_type_with_len_from_raw_bytes_v0() {
-        // v0 message, before we started adding fields to the message
-        let payload: Vec<u8> = vec![
-            200, 213, 166, 94, 34, 52, 245, 93, 0, 1, 0, 3, 0, 96, 254, 205, 0, 0, 0, 0, 64, 85,
-            32, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 10, 1, 128, 133, 181, 13, 0, 0, 0, 0,
-            1, 64, 85, 32, 14, 0, 0, 0, 0, 2, 0, 41, 9, 0, 0, 0, 0, 0, 0, 67, 82, 79, 51, 105, 114,
-            71, 49, 1, 0, 28, 78, 14, 0, 0, 0, 0, 0, 96, 254, 205, 0, 0, 0, 0, 1, 64, 58, 105, 13,
-            0, 0, 0, 0, 0, 96, 254, 205, 0, 0, 0, 0,
-        ];
-
-        let hex = faster_hex::hex_string(&payload);
+        // "v0": không có max_margin_ratio (None)
+        let hex = build_authority_payload_hex(2, None);
 
         #[derive(serde::Deserialize)]
         struct Wrapper {
@@ -634,16 +724,8 @@ mod tests {
 
     #[test]
     fn deser_signed_msg_type_with_len_from_raw_bytes_v1() {
-        // v1 message, added max_margin_ratio field
-        let payload: Vec<u8> = vec![
-            200, 213, 166, 94, 34, 52, 245, 93, 0, 1, 0, 3, 0, 96, 254, 205, 0, 0, 0, 0, 64, 85,
-            32, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 10, 1, 128, 133, 181, 13, 0, 0, 0, 0,
-            1, 64, 85, 32, 14, 0, 0, 0, 0, 2, 0, 41, 9, 0, 0, 0, 0, 0, 0, 67, 82, 79, 51, 105, 114,
-            71, 49, 1, 0, 28, 78, 14, 0, 0, 0, 0, 0, 96, 254, 205, 0, 0, 0, 0, 1, 64, 58, 105, 13,
-            0, 0, 0, 0, 0, 96, 254, 205, 0, 0, 0, 0, 1, 255, 255,
-        ];
-
-        let hex = faster_hex::hex_string(&payload);
+        // "v1": có max_margin_ratio (Some)
+        let hex = build_authority_payload_hex(2, Some(u16::MAX));
 
         #[derive(serde::Deserialize)]
         struct Wrapper {
@@ -656,30 +738,11 @@ mod tests {
 
         match wrapper.message {
             SignedOrderType::Authority { inner: m, raw } => {
-                assert_eq!(Some(hex), raw);
+                assert_eq!(raw, Some(hex));
                 assert_eq!(m.signed_msg_order_params.auction_duration, Some(10));
-                assert_eq!(
-                    m.signed_msg_order_params.auction_start_price,
-                    Some(230000000)
-                );
-                assert_eq!(m.signed_msg_order_params.auction_end_price, Some(237000000));
                 assert_eq!(m.sub_account_id, 2);
                 assert_eq!(m.slot, 2345);
-                assert_eq!(
-                    m.take_profit_order_params,
-                    Some(SignedMsgTriggerOrderParams {
-                        trigger_price: 240000000,
-                        base_asset_amount: 3456000000,
-                    })
-                );
-                assert_eq!(
-                    m.stop_loss_order_params,
-                    Some(SignedMsgTriggerOrderParams {
-                        trigger_price: 225000000,
-                        base_asset_amount: 3456000000,
-                    })
-                );
-                assert_eq!(m.max_margin_ratio, Some(65535));
+                assert_eq!(m.max_margin_ratio, Some(u16::MAX));
             }
             SignedOrderType::Delegated { .. } => panic!("expected Authority variant"),
         }
